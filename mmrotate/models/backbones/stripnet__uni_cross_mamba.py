@@ -251,7 +251,7 @@ class OverlapPatchEmbed(nn.Module):
 
 
 @ROTATED_BACKBONES.register_module()
-class StripMambaNet(BaseModule):
+class StripSMambaNet(BaseModule):
     def __init__(
         self,
         img_size=224,
@@ -332,7 +332,7 @@ class StripMambaNet(BaseModule):
                     fan_out //= m.groups
                     normal_init(m, mean=0, std=math.sqrt(2.0 / fan_out), bias=0)
         else:
-            super(StripMambaNet, self).init_weights()
+            super(StripSMambaNet, self).init_weights()
 
     def freeze_patch_emb(self):
         self.patch_embed1.requires_grad = False
