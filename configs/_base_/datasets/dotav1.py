@@ -1,6 +1,6 @@
 # dataset settings
 dataset_type = 'DOTADataset'
-data_root = "/defaultShare/pubdata/remote_sensing/split_ms_dota/" 
+data_root = "/home/u2120220582/project/Strip-R-CNN/dota/split_ms_dota/" 
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 train_pipeline = [

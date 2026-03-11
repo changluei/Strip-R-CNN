@@ -16,7 +16,8 @@ model = dict(
         drop_rate=0.1,
         drop_path_rate=0.15,
         depths=[3,3,5,2],
-        init_cfg=dict(type='Pretrained', checkpoint="pretrained/stripnet_s.pth.tar"),
+        init_cfg=dict(type='Pretrained', checkpoint="pretrained/stripnet_t.pth"),
+        #init_cfg=None,
         norm_cfg=dict(type='SyncBN', requires_grad=True)),
     neck=dict(
         type='FPN',

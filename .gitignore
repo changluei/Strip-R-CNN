@@ -1,0 +1,15 @@
+dota
+work_dirs/
+pretrained/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+*.log
+*.pth
+*.pt
+*.ckpt
+*.tar
+*.zip
+*.slurm
+core.*
