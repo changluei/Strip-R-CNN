@@ -112,7 +112,7 @@ class StripBlock(nn.Module):
     ):
         super().__init__()
         # Align with the diagram: 3x3 depthwise conv -> Axial Mamba -> strip convs -> 1x1 conv.
-        self.conv0 = nn.Conv2d(dim, dim, 3, padding=1, groups=dim)
+        self.conv0 = nn.Conv2d(dim, dim, 5, padding=2, groups=dim)
         self.axial_mamba = AxialCrossMambaUni(
             dim=dim,
             d_state=mamba_d_state,
