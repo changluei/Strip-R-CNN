@@ -344,8 +344,22 @@ class StripDMambaNet(BaseModule):
                     fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                     fan_out //= m.groups
                     normal_init(m, mean=0, std=math.sqrt(2.0 / fan_out), bias=0)
+                elif isinstance(m, nn.Conv1d):
+                    nn.init.kaiming_normal_(m.weight)
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
         else:
             super(StripDMambaNet, self).init_weights()
+            # 预训练权重不含 Mamba 参数，加载后对其单独补充初始化
+            for m in self.modules():
+                if isinstance(m, AxialCrossMambaBi):
+                    for sub_m in m.modules():
+                        if isinstance(sub_m, nn.Linear):
+                            trunc_normal_init(sub_m, std=.02, bias=0.)
+                        elif isinstance(sub_m, nn.Conv1d):
+                            nn.init.kaiming_normal_(sub_m.weight)
+                            if sub_m.bias is not None:
+                                nn.init.zeros_(sub_m.bias)
 
     def freeze_patch_emb(self):
         self.patch_embed1.requires_grad = False
