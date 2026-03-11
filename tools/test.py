@@ -15,6 +15,7 @@ from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
 from mmdet.apis import multi_gpu_test, single_gpu_test
 from mmdet.datasets import build_dataloader, replace_ImageToTensor
 
+from dota_coco_eval import evaluate_dota_coco_ap
 from mmrotate.datasets import build_dataset
 from mmrotate.models import build_detector
 from mmrotate.utils import compat_cfg, setup_multi_processes
@@ -86,6 +87,11 @@ def parse_args():
         help='custom options for evaluation, the key-value pair in xxx=yyy '
         'format will be kwargs for dataset.evaluate() function')
     parser.add_argument(
+        '--eval-dota-coco-ap',
+        action='store_true',
+        help='compute additional DOTA AP50/AP75/AP metrics in a separate '
+        'helper script module')
+    parser.add_argument(
         '--launcher',
         choices=['none', 'pytorch', 'slurm', 'mpi'],
         default='none',
@@ -102,10 +108,12 @@ def main():
     args = parse_args()
 
     assert args.out or args.eval or args.format_only or args.show \
+        or args.eval_dota_coco_ap \
         or args.show_dir, \
         ('Please specify at least one operation (save/eval/format/show the '
          'results / save the results) with the argument "--out", "--eval"'
-         ', "--format-only", "--show" or "--show-dir"')
+         ', "--format-only", "--show", "--show-dir" or '
+         '"--eval-dota-coco-ap"')
 
     if args.eval and args.format_only:
         raise ValueError('--eval and --format_only cannot be both specified')
@@ -253,6 +261,20 @@ def main():
                 eval_kwargs.pop(key, None)
             eval_kwargs.update(dict(metric=args.eval, **kwargs))
             metric = dataset.evaluate(outputs, **eval_kwargs)
+            if args.eval_dota_coco_ap:
+                metric.update(
+                    evaluate_dota_coco_ap(
+                        dataset,
+                        outputs,
+                        scale_ranges=eval_kwargs.get('scale_ranges'),
+                        logger=eval_kwargs.get('logger'),
+                        nproc=eval_kwargs.get('nproc', 4)))
+            print(metric)
+            metric_dict = dict(config=args.config, metric=metric)
+            if args.work_dir is not None and rank == 0:
+                mmcv.dump(metric_dict, json_file)
+        elif args.eval_dota_coco_ap:
+            metric = evaluate_dota_coco_ap(dataset, outputs)
             print(metric)
             metric_dict = dict(config=args.config, metric=metric)
             if args.work_dir is not None and rank == 0:

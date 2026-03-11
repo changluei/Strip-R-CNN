@@ -197,29 +197,16 @@ class DOTADataset(CustomDataset):
         annotations = [self.get_ann_info(i) for i in range(len(self))]
         eval_results = {}
         if metric == 'mAP':
-            # COCO-style IoU thresholds
-            iou_thrs = [round(x / 100, 2) for x in range(50, 100, 5)]  # 0.50, 0.55, ..., 0.95
-
-            ap_results = {}
-            for thr in iou_thrs:
-                mean_ap, _ = eval_rbbox_map(
-                    results,
-                    annotations,
-                    scale_ranges=scale_ranges,
-                    iou_thr=thr,
-                    dataset=self.CLASSES,
-                    logger=logger,
-                    nproc=nproc)
-
-                ap_results[thr] = float(mean_ap)
-
-            # 你要的三个指标
-            eval_results['AP50'] = ap_results[0.50]
-            eval_results['AP75'] = ap_results[0.75]
-            eval_results['AP'] = sum(ap_results.values()) / len(ap_results)
-
-            # 兼容原来日志里习惯看的 mAP
-            eval_results['mAP'] = eval_results['AP50']
+            assert isinstance(iou_thr, float)
+            mean_ap, _ = eval_rbbox_map(
+                results,
+                annotations,
+                scale_ranges=scale_ranges,
+                iou_thr=iou_thr,
+                dataset=self.CLASSES,
+                logger=logger,
+                nproc=nproc)
+            eval_results['mAP'] = mean_ap
         else:
             raise NotImplementedError
 
