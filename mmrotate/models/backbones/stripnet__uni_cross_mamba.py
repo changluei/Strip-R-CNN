@@ -322,7 +322,16 @@ class StripSMambaNet(BaseModule):
     def init_weights(self):
         print('init cfg', self.init_cfg)
         if self.init_cfg is None:
+            # 1. collect all mamba module
+            mamba_submodule_ids = set()
             for m in self.modules():
+                if isinstance(m, Mamba):
+                    mamba_submodule_ids.update(id(sm) for sm in m.modules())
+            
+            for m in self.modules():
+                if id(m) in mamba_submodule_ids:
+                    continue
+                
                 if isinstance(m, nn.Linear):
                     trunc_normal_init(m, std=.02, bias=0.)
                 elif isinstance(m, nn.LayerNorm):
