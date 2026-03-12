@@ -40,7 +40,6 @@ class Mlp(nn.Module):
 class AxialCrossMambaUni(nn.Module):
     def __init__(self, dim, d_state=16, d_conv=4, expand=2):
         super().__init__()
-        # 定义 4 个方向的 Mamba
         self.row_mamba = Mamba(d_model=dim, d_state=d_state, d_conv=d_conv, expand=expand)
         self.col_mamba = Mamba(d_model=dim, d_state=d_state, d_conv=d_conv, expand=expand)
         self.diag_mamba = Mamba(d_model=dim, d_state=d_state, d_conv=d_conv, expand=expand)
@@ -55,7 +54,6 @@ class AxialCrossMambaUni(nn.Module):
             return self.idx_cache[key]
 
         coords = []
-        # 按对角线偏移量遍历，提取二维坐标映射到一维
         for offset in range(-(h - 1), w):
             for i in range(h):
                 j = i + offset
@@ -63,7 +61,7 @@ class AxialCrossMambaUni(nn.Module):
                     coords.append(i * w + j)
                     
         idx = torch.tensor(coords, dtype=torch.long, device=device)
-        inv_idx = torch.argsort(idx) # 用于极速还原的逆索引
+        inv_idx = torch.argsort(idx)
         
         self.idx_cache[key] = (idx, inv_idx)
         return idx, inv_idx
@@ -72,30 +70,24 @@ class AxialCrossMambaUni(nn.Module):
         b, c, h, w = x.shape
         idx, inv_idx = self._get_diag_indices(h, w, x.device)
 
-        # 1. 横向扫描 (行优先: 左 -> 右)
-        row_tokens = x.flatten(2, 3).transpose(1, 2)  # [B, H*W, C]
+        row_tokens = x.flatten(2, 3).transpose(1, 2) 
         row_out = self.row_mamba(row_tokens)
         row_feat = row_out.transpose(1, 2).reshape(b, c, h, w)
 
-        # 2. 纵向扫描 (列优先: 上 -> 下)
         col_tokens = x.transpose(2, 3).flatten(2, 3).transpose(1, 2)  # [B, H*W, C]
         col_out = self.col_mamba(col_tokens)
         col_feat = col_out.transpose(1, 2).reshape(b, c, w, h).transpose(2, 3)
 
-        # 3. 主对角线扫描 (左上 -> 右下)
-        diag_tokens = row_tokens[:, idx, :]  # 直接用行优先序列切片重排
+        diag_tokens = row_tokens[:, idx, :]  
         diag_out = self.diag_mamba(diag_tokens)
         diag_feat = diag_out[:, inv_idx, :].transpose(1, 2).reshape(b, c, h, w)
 
-        # 4. 副对角线扫描 (右上 -> 左下)
-        # 技巧：沿 W 轴翻转图像，复用主对角线索引，过完 Mamba 再翻转回来
         x_flipped = torch.flip(x, dims=[3])
         anti_tokens = x_flipped.flatten(2, 3).transpose(1, 2)[:, idx, :]
         anti_out = self.anti_diag_mamba(anti_tokens)
         anti_feat = anti_out[:, inv_idx, :].transpose(1, 2).reshape(b, c, h, w)
         anti_feat = torch.flip(anti_feat, dims=[3])
 
-        # 5. 门控融合 (残差连接)
         gate = torch.sigmoid(row_feat + col_feat + diag_feat + anti_feat)
         return x * gate
 
@@ -111,7 +103,6 @@ class StripBlock(nn.Module):
         mamba_expand=2,
     ):
         super().__init__()
-        # Align with the diagram: 3x3 depthwise conv -> Axial Mamba -> strip convs -> 1x1 conv.
         self.conv0 = nn.Conv2d(dim, dim, 5, padding=2, groups=dim)
         self.axial_mamba = AxialCrossMambaUni(
             dim=dim,
@@ -331,7 +322,7 @@ class StripSMambaNet(BaseModule):
             for m in self.modules():
                 if id(m) in mamba_submodule_ids:
                     continue
-                
+
                 if isinstance(m, nn.Linear):
                     trunc_normal_init(m, std=.02, bias=0.)
                 elif isinstance(m, nn.LayerNorm):

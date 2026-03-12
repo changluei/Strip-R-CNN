@@ -94,7 +94,6 @@ class StripBlock(nn.Module):
         mamba_expand=2,
     ):
         super().__init__()
-        # Align with the diagram: 3x3 depthwise conv -> Axial Mamba -> strip convs -> 1x1 conv.
         self.conv0 = nn.Conv2d(dim, dim, 5, padding=2, groups=dim)
         self.axial_mamba = AxialMamba(
             dim=dim,
@@ -313,7 +312,7 @@ class StripMambaNet(BaseModule):
             for m in self.modules():
                 if id(m) in mamba_submodule_ids:
                     continue
-                
+
                 if isinstance(m, nn.Linear):
                     trunc_normal_init(m, std=.02, bias=0.)
                 elif isinstance(m, nn.LayerNorm):

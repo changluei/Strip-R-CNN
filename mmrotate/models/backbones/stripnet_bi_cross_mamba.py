@@ -38,7 +38,6 @@ class Mlp(nn.Module):
 
 
 class BiMambaWrapper(nn.Module):
-    """封装双向 Mamba：正向过一次，序列翻转后过反向 Mamba，再相加"""
     def __init__(self, dim, d_state=16, d_conv=4, expand=2):
         super().__init__()
         self.forward_mamba = Mamba(d_model=dim, d_state=d_state, d_conv=d_conv, expand=expand)
@@ -48,17 +47,15 @@ class BiMambaWrapper(nn.Module):
         # x shape: [B, L, C]
         out_fwd = self.forward_mamba(x)
         
-        # 序列首尾翻转，进行反向因果建模
         x_rev = torch.flip(x, dims=[1])
         out_rev = self.reverse_mamba(x_rev)
-        out_rev = torch.flip(out_rev, dims=[1]) # 翻转回原始位置对齐
+        out_rev = torch.flip(out_rev, dims=[1]) 
         
         return out_fwd + out_rev
 
 class AxialCrossMambaBi(nn.Module):
     def __init__(self, dim, d_state=16, d_conv=4, expand=2):
         super().__init__()
-        # 使用双向 Wrapper，总共 8 个 Mamba 实例
         self.row_bimamba = BiMambaWrapper(dim, d_state, d_conv, expand)
         self.col_bimamba = BiMambaWrapper(dim, d_state, d_conv, expand)
         self.diag_bimamba = BiMambaWrapper(dim, d_state, d_conv, expand)
@@ -67,7 +64,6 @@ class AxialCrossMambaBi(nn.Module):
         self.idx_cache = {}
 
     def _get_diag_indices(self, h, w, device):
-        # 与单向版逻辑完全一致
         key = (h, w)
         if key in self.idx_cache:
             return self.idx_cache[key]
@@ -86,29 +82,24 @@ class AxialCrossMambaBi(nn.Module):
         b, c, h, w = x.shape
         idx, inv_idx = self._get_diag_indices(h, w, x.device)
 
-        # 1. 双向横向扫描 (左 <-> 右)
         row_tokens = x.flatten(2, 3).transpose(1, 2)
         row_out = self.row_bimamba(row_tokens)
         row_feat = row_out.transpose(1, 2).reshape(b, c, h, w)
 
-        # 2. 双向纵向扫描 (上 <-> 下)
         col_tokens = x.transpose(2, 3).flatten(2, 3).transpose(1, 2)
         col_out = self.col_bimamba(col_tokens)
         col_feat = col_out.transpose(1, 2).reshape(b, c, w, h).transpose(2, 3)
 
-        # 3. 双向主对角线扫描 (左上 <-> 右下)
         diag_tokens = row_tokens[:, idx, :]
         diag_out = self.diag_bimamba(diag_tokens)
         diag_feat = diag_out[:, inv_idx, :].transpose(1, 2).reshape(b, c, h, w)
 
-        # 4. 双向副对角线扫描 (右上 <-> 左下)
         x_flipped = torch.flip(x, dims=[3])
         anti_tokens = x_flipped.flatten(2, 3).transpose(1, 2)[:, idx, :]
         anti_out = self.anti_diag_bimamba(anti_tokens)
         anti_feat = anti_out[:, inv_idx, :].transpose(1, 2).reshape(b, c, h, w)
         anti_feat = torch.flip(anti_feat, dims=[3])
 
-        # 5. 门控融合
         gate = torch.sigmoid(row_feat + col_feat + diag_feat + anti_feat)
         return x * gate
 
@@ -124,7 +115,6 @@ class StripBlock(nn.Module):
         mamba_expand=2,
     ):
         super().__init__()
-        # Align with the diagram: 3x3 depthwise conv -> Axial Mamba -> strip convs -> 1x1 conv.
         self.conv0 = nn.Conv2d(dim, dim, 5, padding=2, groups=dim)
         self.axial_mamba = AxialCrossMambaBi(
             dim=dim,
@@ -343,7 +333,7 @@ class StripDMambaNet(BaseModule):
             for m in self.modules():
                 if id(m) in mamba_submodule_ids:
                     continue
-                
+
                 if isinstance(m, nn.Linear):
                     trunc_normal_init(m, std=.02, bias=0.)
                 elif isinstance(m, nn.LayerNorm):
