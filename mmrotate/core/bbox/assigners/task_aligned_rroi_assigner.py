@@ -27,7 +27,11 @@ class TaskAlignedRRoIAssigner(BaseAssigner):
                  candidate_iou_thr=0.0,
                  use_max_t_when_conflict=True,
                  iou_calculator=dict(type='RBboxOverlaps2D'),
-                 eps=1e-12):
+                 eps=1e-12,
+                 **kwargs):
+        # Keep compatibility with config inheritance where base assigner keys
+        # (e.g., pos_iou_thr/neg_iou_thr) may be merged in.
+        del kwargs
         self.topk = topk
         self.alpha = alpha
         self.beta = beta
@@ -82,10 +86,11 @@ class TaskAlignedRRoIAssigner(BaseAssigner):
                gt_bboxes,
                gt_labels,
                bbox_coder,
+               gt_bboxes_ignore=None,
                img_meta=None,
                **kwargs):
         """Assign gt to proposals with TAL metric."""
-        del img_meta  # reserved for compatibility
+        del gt_bboxes_ignore, img_meta  # reserved for compatibility
         proposals = proposals[:, :5]
         gt_bboxes = gt_bboxes[:, :5]
         device = proposals.device

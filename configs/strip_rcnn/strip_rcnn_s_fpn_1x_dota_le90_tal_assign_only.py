@@ -14,6 +14,7 @@ model = dict(
     train_cfg=dict(
         rcnn=dict(
             assigner=dict(
+                _delete_=True,
                 type='TaskAlignedRRoIAssigner',
                 topk=6,
                 alpha=1.0,
