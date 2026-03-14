@@ -51,7 +51,7 @@ class BiMambaWrapper(nn.Module):
         out_rev = self.reverse_mamba(x_rev)
         out_rev = torch.flip(out_rev, dims=[1]) 
         
-        return out_fwd + out_rev
+        return 0.5 * (out_fwd + out_rev)
 
 class AxialCrossMambaBi(nn.Module):
     def __init__(self, dim, d_state=16, d_conv=4, expand=2):
@@ -100,7 +100,8 @@ class AxialCrossMambaBi(nn.Module):
         anti_feat = anti_out[:, inv_idx, :].transpose(1, 2).reshape(b, c, h, w)
         anti_feat = torch.flip(anti_feat, dims=[3])
 
-        gate = torch.sigmoid(row_feat + col_feat + diag_feat + anti_feat)
+        logit = (row_feat + col_feat + diag_feat + anti_feat) / 4.0
+        gate = torch.sigmoid(logit)
         return x * gate
 
 
