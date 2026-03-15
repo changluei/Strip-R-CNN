@@ -31,6 +31,4 @@ model = dict(
             pos_weight=-1,
             debug=False)))
 
-optimizer = dict(lr=8e-5)
 optimizer_config = dict(grad_clip=dict(max_norm=10, norm_type=2))
-lr_config = dict(warmup='linear', warmup_iters=1000, warmup_ratio=0.1)
