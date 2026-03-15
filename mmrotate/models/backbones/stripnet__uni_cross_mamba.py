@@ -4,13 +4,15 @@ from functools import partial
 
 import torch
 import torch.nn as nn
+from mmcv import print_log
 from mmcv.cnn import build_norm_layer
 from mmcv.cnn.utils.weight_init import constant_init, normal_init, trunc_normal_init
-from mmcv.runner import BaseModule
+from mmcv.runner import BaseModule, get_dist_info
 from timm.models.layers import DropPath
 from torch.nn.modules.utils import _pair as to_2tuple
 
 from ..builder import ROTATED_BACKBONES
+from mmrotate.utils import get_root_logger
 
 from mamba_ssm import Mamba
 
@@ -263,6 +265,9 @@ class StripSMambaNet(BaseModule):
         mamba_d_state=16,
         mamba_d_conv=4,
         mamba_expand=2,
+        debug_backbone_stats=False,
+        debug_backbone_interval=200,
+        debug_backbone_log_first_n=10,
     ):
         super().__init__(init_cfg=init_cfg)
 
@@ -275,6 +280,10 @@ class StripSMambaNet(BaseModule):
 
         self.depths = depths
         self.num_stages = num_stages
+        self.debug_backbone_stats = debug_backbone_stats
+        self.debug_backbone_interval = max(int(debug_backbone_interval), 1)
+        self.debug_backbone_log_first_n = max(int(debug_backbone_log_first_n), 0)
+        self._debug_forward_iter = 0
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
         cur = 0
@@ -310,6 +319,19 @@ class StripSMambaNet(BaseModule):
             setattr(self, f"patch_embed{i + 1}", patch_embed)
             setattr(self, f"block{i + 1}", block)
             setattr(self, f"norm{i + 1}", norm)
+
+    @staticmethod
+    def _tensor_stats(x):
+        if x.numel() == 0:
+            return dict(mean=0.0, min=0.0, max=0.0, absmax=0.0)
+        finite = x[torch.isfinite(x)]
+        if finite.numel() == 0:
+            return dict(mean=0.0, min=0.0, max=0.0, absmax=0.0)
+        return dict(
+            mean=float(finite.mean().item()),
+            min=float(finite.min().item()),
+            max=float(finite.max().item()),
+            absmax=float(finite.abs().max().item()))
 
     def init_weights(self):
         print('init cfg', self.init_cfg)
@@ -352,17 +374,72 @@ class StripSMambaNet(BaseModule):
     def forward_features(self, x):
         B = x.shape[0]
         outs = []
+        self._debug_forward_iter += 1
+        rank, _ = get_dist_info()
+        log_debug = (
+            self.training and self.debug_backbone_stats and rank == 0 and
+            (self._debug_forward_iter <= self.debug_backbone_log_first_n or
+             self._debug_forward_iter % self.debug_backbone_interval == 0))
+
+        stage_debug_info = [] if log_debug else None
         for i in range(self.num_stages):
             patch_embed = getattr(self, f"patch_embed{i + 1}")
             block = getattr(self, f"block{i + 1}")
             norm = getattr(self, f"norm{i + 1}")
             x, H, W = patch_embed(x)
-            for blk in block:
+
+            if log_debug:
+                patch_nonfinite = int((~torch.isfinite(x)).sum().item())
+                patch_stats = self._tensor_stats(x)
+                first_nonfinite_block = -1
+                block_nonfinite = 0
+                block_absmax = 0.0
+
+            for blk_idx, blk in enumerate(block):
                 x = blk(x)
+                if log_debug:
+                    nonfinite = int((~torch.isfinite(x)).sum().item())
+                    if nonfinite > 0 and first_nonfinite_block < 0:
+                        first_nonfinite_block = blk_idx
+                    block_nonfinite += nonfinite
+                    block_absmax = max(block_absmax, self._tensor_stats(x)['absmax'])
             x = x.flatten(2).transpose(1, 2)
             x = norm(x)
             x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
             outs.append(x)
+            if log_debug:
+                out_nonfinite = int((~torch.isfinite(x)).sum().item())
+                out_stats = self._tensor_stats(x)
+                stage_debug_info.append(
+                    dict(
+                        stage=i + 1,
+                        shape=f"{tuple(x.shape)}",
+                        patch_nonfinite=patch_nonfinite,
+                        patch_stats=patch_stats,
+                        block_nonfinite=block_nonfinite,
+                        first_nonfinite_block=first_nonfinite_block,
+                        block_absmax=block_absmax,
+                        out_nonfinite=out_nonfinite,
+                        out_stats=out_stats))
+        if log_debug:
+            for info in stage_debug_info:
+                print_log(
+                    f"[BackboneDebug][iter={self._debug_forward_iter}] "
+                    f"stage={info['stage']} shape={info['shape']} "
+                    f"patch_nf={info['patch_nonfinite']} "
+                    f"patch(m/n/x/abs)={info['patch_stats']['mean']:.4f}/"
+                    f"{info['patch_stats']['min']:.4f}/"
+                    f"{info['patch_stats']['max']:.4f}/"
+                    f"{info['patch_stats']['absmax']:.4f} "
+                    f"blocks_nf={info['block_nonfinite']} "
+                    f"first_nf_block={info['first_nonfinite_block']} "
+                    f"blocks_absmax={info['block_absmax']:.4f} "
+                    f"out_nf={info['out_nonfinite']} "
+                    f"out(m/n/x/abs)={info['out_stats']['mean']:.4f}/"
+                    f"{info['out_stats']['min']:.4f}/"
+                    f"{info['out_stats']['max']:.4f}/"
+                    f"{info['out_stats']['absmax']:.4f}",
+                    logger=get_root_logger())
         return outs
 
     def forward(self, x):

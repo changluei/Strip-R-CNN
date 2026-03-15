@@ -20,7 +20,10 @@ model = dict(
         drop_path_rate=0.15,
         depths=[2, 2, 4, 2],
         init_cfg=dict(type='Pretrained', checkpoint='pretrained/stripnet_s.pth'),
-        norm_cfg=dict(type='SyncBN', requires_grad=True)),
+        norm_cfg=dict(type='SyncBN', requires_grad=True),
+        debug_backbone_stats=True,
+        debug_backbone_interval=50,
+        debug_backbone_log_first_n=20),
     neck=dict(
         type='FPN',
         in_channels=[64, 128, 320, 512],
