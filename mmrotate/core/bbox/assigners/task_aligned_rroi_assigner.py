@@ -40,6 +40,15 @@ class TaskAlignedRRoIAssigner(BaseAssigner):
         self.iou_calculator = build_iou_calculator(iou_calculator)
         self.eps = eps
 
+    @staticmethod
+    def _tensor_stats(x):
+        if x.numel() == 0:
+            return dict(mean=0.0, min=0.0, max=0.0)
+        return dict(
+            mean=float(x.mean().item()),
+            min=float(x.min().item()),
+            max=float(x.max().item()))
+
     def _empty_result(self, num_gts, num_props, device):
         assigned_gt_inds = torch.zeros(num_props, dtype=torch.long, device=device)
         assigned_labels = torch.full((num_props, ), -1, dtype=torch.long, device=device)
@@ -53,6 +62,21 @@ class TaskAlignedRRoIAssigner(BaseAssigner):
         _set_assign_extra(assign_result, 'assign_metrics', zeros)
         _set_assign_extra(assign_result, 'assign_ious', zeros)
         _set_assign_extra(assign_result, 'assign_t_hat', zeros)
+        _set_assign_extra(
+            assign_result, 'assign_debug',
+            dict(
+                num_props=int(num_props),
+                num_gts=int(num_gts),
+                cls_nonfinite=0,
+                iou_nonfinite=0,
+                s_stats=dict(mean=0.0, min=0.0, max=0.0),
+                u_stats=dict(mean=0.0, min=0.0, max=0.0),
+                t_stats=dict(mean=0.0, min=0.0, max=0.0),
+                candidate_per_gt=dict(mean=0.0, min=0, max=0),
+                multi_match_props=0,
+                assigned_pos=0,
+                assigned_neg=int(num_props),
+                t_hat_pos_stats=dict(mean=0.0, min=0.0, max=0.0)))
         return assign_result
 
     def _decode_iou_matrix(self, proposals, bbox_pred, gt_bboxes, gt_labels,
@@ -101,6 +125,7 @@ class TaskAlignedRRoIAssigner(BaseAssigner):
             return self._empty_result(num_gts, num_props, device)
 
         gt_labels = gt_labels.to(device=device, dtype=torch.long)
+        cls_nonfinite = int((~torch.isfinite(cls_score)).sum().item())
 
         # s: foreground class probability matrix [N, M].
         cls_score = torch.nan_to_num(cls_score, nan=0.0, posinf=0.0, neginf=0.0)
@@ -109,8 +134,10 @@ class TaskAlignedRRoIAssigner(BaseAssigner):
         s = probs[:, gt_labels]
 
         # u: IoU matrix between decoded bboxes and gts [N, M].
-        u = self._decode_iou_matrix(proposals, bbox_pred, gt_bboxes, gt_labels,
-                                    bbox_coder)
+        u_raw = self._decode_iou_matrix(proposals, bbox_pred, gt_bboxes, gt_labels,
+                                        bbox_coder)
+        iou_nonfinite = int((~torch.isfinite(u_raw)).sum().item())
+        u = u_raw
         u = torch.nan_to_num(u, nan=0.0, posinf=0.0, neginf=0.0).clamp(0.0, 1.0)
 
         if self.candidate_iou_thr > 0:
@@ -122,6 +149,14 @@ class TaskAlignedRRoIAssigner(BaseAssigner):
         t = (s.clamp(min=self.eps)**self.alpha) * (u.clamp(min=self.eps)**self.beta)
         t = t * candidate_mask.to(dtype=t.dtype)
         t = torch.nan_to_num(t, nan=0.0, posinf=0.0, neginf=0.0)
+        if num_gts > 0:
+            candidate_per_gt = candidate_mask.sum(dim=0)
+            candidate_stats = dict(
+                mean=float(candidate_per_gt.float().mean().item()),
+                min=int(candidate_per_gt.min().item()),
+                max=int(candidate_per_gt.max().item()))
+        else:
+            candidate_stats = dict(mean=0.0, min=0, max=0)
 
         topk = min(self.topk, num_props)
         if topk < 1:
@@ -172,6 +207,14 @@ class TaskAlignedRRoIAssigner(BaseAssigner):
             pos_inds = torch.nonzero(pos_mask, as_tuple=False).squeeze(1)
             matched_gt_inds = assigned_gt_inds[pos_inds] - 1
             assigned_t_hat[pos_inds] = t_hat_matrix[pos_inds, matched_gt_inds]
+            t_hat_pos_stats = self._tensor_stats(assigned_t_hat[pos_inds])
+        else:
+            t_hat_pos_stats = dict(mean=0.0, min=0.0, max=0.0)
+
+        match_count = (t_hat_matrix > 0).sum(dim=1)
+        multi_match_props = int((match_count > 1).sum().item())
+        assigned_pos = int(pos_mask.sum().item())
+        assigned_neg = int((assigned_gt_inds == 0).sum().item())
 
         assign_result = AssignResult(
             num_gts=num_gts,
@@ -181,4 +224,19 @@ class TaskAlignedRRoIAssigner(BaseAssigner):
         _set_assign_extra(assign_result, 'assign_metrics', assigned_t)
         _set_assign_extra(assign_result, 'assign_ious', assigned_u)
         _set_assign_extra(assign_result, 'assign_t_hat', assigned_t_hat)
+        _set_assign_extra(
+            assign_result, 'assign_debug',
+            dict(
+                num_props=int(num_props),
+                num_gts=int(num_gts),
+                cls_nonfinite=cls_nonfinite,
+                iou_nonfinite=iou_nonfinite,
+                s_stats=self._tensor_stats(s),
+                u_stats=self._tensor_stats(u),
+                t_stats=self._tensor_stats(t),
+                candidate_per_gt=candidate_stats,
+                multi_match_props=multi_match_props,
+                assigned_pos=assigned_pos,
+                assigned_neg=assigned_neg,
+                t_hat_pos_stats=t_hat_pos_stats))
         return assign_result
