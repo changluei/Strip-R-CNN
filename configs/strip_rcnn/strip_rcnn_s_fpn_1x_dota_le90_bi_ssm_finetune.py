@@ -157,7 +157,7 @@ data = dict(
 optimizer = dict(
     _delete_=True,
     type='AdamW',
-    lr=1e-4,
+    lr=8e-5,
     betas=(0.9, 0.999),
     weight_decay=0.05,
     paramwise_cfg=dict(
@@ -165,17 +165,20 @@ optimizer = dict(
         bias_decay_mult=0.0,
         bypass_duplicate=True,
         custom_keys={
-            'backbone': dict(lr_mult=0.3),
-            'attn.spatial_gating_unit.axial_mamba': dict(lr_mult=2.0, decay_mult=0.5),
+            'backbone': dict(lr_mult=0.2),
+            'attn.spatial_gating_unit.axial_mamba': dict(
+                lr_mult=1.0, decay_mult=0.5),
             'neck': dict(lr_mult=1.0),
             'rpn_head': dict(lr_mult=1.0),
             'roi_head': dict(lr_mult=1.0),
         }))
 
+optimizer_config = dict(grad_clip=dict(max_norm=10, norm_type=2))
+
 runner = dict(type='EpochBasedRunner', max_epochs=12)
 lr_config = dict(
     policy='step',
     warmup='linear',
-    warmup_iters=500,
-    warmup_ratio=1.0 / 3,
-    step=[16, 22])
+    warmup_iters=1000,
+    warmup_ratio=0.1,
+    step=[8, 11])

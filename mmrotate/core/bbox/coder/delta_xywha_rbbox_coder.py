@@ -143,6 +143,11 @@ def bbox2delta(proposals,
     gt = gt.float()
     px, py, pw, ph, pa = proposals.unbind(dim=-1)
     gx, gy, gw, gh, ga = gt.unbind(dim=-1)
+    eps = torch.finfo(proposals.dtype).eps
+    pw = pw.clamp(min=eps)
+    ph = ph.clamp(min=eps)
+    gw = gw.clamp(min=eps)
+    gh = gh.clamp(min=eps)
 
     if proj_xy:
         dx = (torch.cos(pa) * (gx - px) + torch.sin(pa) * (gy - py)) / pw
@@ -159,8 +164,8 @@ def bbox2delta(proposals,
         gw_regular = torch.where(abs_dtheta1 < abs_dtheta2, gw, gh)
         gh_regular = torch.where(abs_dtheta1 < abs_dtheta2, gh, gw)
         da = torch.where(abs_dtheta1 < abs_dtheta2, dtheta1, dtheta2)
-        dw = torch.log(gw_regular / pw)
-        dh = torch.log(gh_regular / ph)
+        dw = torch.log(gw_regular.clamp(min=eps) / pw)
+        dh = torch.log(gh_regular.clamp(min=eps) / ph)
     else:
         da = norm_angle(ga - pa, angle_range)
         dw = torch.log(gw / pw)

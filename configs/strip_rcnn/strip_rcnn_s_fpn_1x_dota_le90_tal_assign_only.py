@@ -16,10 +16,10 @@ model = dict(
             assigner=dict(
                 _delete_=True,
                 type='TaskAlignedRRoIAssigner',
-                topk=6,
+                topk=3,
                 alpha=1.0,
-                beta=6.0,
-                candidate_iou_thr=0.0,
+                beta=4.0,
+                candidate_iou_thr=0.1,
                 use_max_t_when_conflict=True,
                 iou_calculator=dict(type='RBboxOverlaps2D')),
             sampler=dict(
@@ -30,3 +30,7 @@ model = dict(
                 add_gt_as_proposals=False),
             pos_weight=-1,
             debug=False)))
+
+optimizer = dict(lr=8e-5)
+optimizer_config = dict(grad_clip=dict(max_norm=10, norm_type=2))
+lr_config = dict(warmup='linear', warmup_iters=1000, warmup_ratio=0.1)

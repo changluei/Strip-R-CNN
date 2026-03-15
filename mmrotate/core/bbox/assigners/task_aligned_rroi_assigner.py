@@ -103,12 +103,15 @@ class TaskAlignedRRoIAssigner(BaseAssigner):
         gt_labels = gt_labels.to(device=device, dtype=torch.long)
 
         # s: foreground class probability matrix [N, M].
+        cls_score = torch.nan_to_num(cls_score, nan=0.0, posinf=0.0, neginf=0.0)
         probs = F.softmax(cls_score, dim=1)[:, :-1]
+        probs = torch.nan_to_num(probs, nan=0.0, posinf=1.0, neginf=0.0)
         s = probs[:, gt_labels]
 
         # u: IoU matrix between decoded bboxes and gts [N, M].
         u = self._decode_iou_matrix(proposals, bbox_pred, gt_bboxes, gt_labels,
                                     bbox_coder)
+        u = torch.nan_to_num(u, nan=0.0, posinf=0.0, neginf=0.0).clamp(0.0, 1.0)
 
         if self.candidate_iou_thr > 0:
             candidate_mask = u >= self.candidate_iou_thr
@@ -118,6 +121,7 @@ class TaskAlignedRRoIAssigner(BaseAssigner):
         # t = s^alpha * u^beta.
         t = (s.clamp(min=self.eps)**self.alpha) * (u.clamp(min=self.eps)**self.beta)
         t = t * candidate_mask.to(dtype=t.dtype)
+        t = torch.nan_to_num(t, nan=0.0, posinf=0.0, neginf=0.0)
 
         topk = min(self.topk, num_props)
         if topk < 1:
