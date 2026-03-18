@@ -6,18 +6,17 @@ _base_ = [
 angle_version = 'le90'
 gpu_number = 8
 # fp16 = dict(loss_scale='dynamic')
-
 model = dict(
     type='StripRCNN',
     backbone=dict(
-        type='StripGateNet',
+        type='StripSMambaNet',
         embed_dims=[64, 128, 320, 512],
-        k1s=[1, 1, 1, 1],
-        k2s=[19, 19, 19, 19],
+        k1s=[1,1,1,1],
+        k2s=[19,19,19,19],
         drop_rate=0.1,
         drop_path_rate=0.15,
-        depths=[2, 2, 4, 2],
-        init_cfg=dict(type='Pretrained', checkpoint='pretrained/stripnet_s.pth'),
+        depths=[2,2,4,2],
+        init_cfg=dict(type='Pretrained', checkpoint="pretrained/stripnet_s.pth"),
         norm_cfg=dict(type='SyncBN', requires_grad=True)),
     neck=dict(
         type='FPN',
@@ -39,14 +38,19 @@ model = dict(
             angle_range=angle_version,
             target_means=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             target_stds=[1.0, 1.0, 1.0, 1.0, 0.5, 0.5]),
-        loss_cls=dict(type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0),
+        loss_cls=dict(
+            type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0),
         loss_bbox=dict(
             type='SmoothL1Loss', beta=0.1111111111111111, loss_weight=1.0)),
     roi_head=dict(
         type='OrientedStandardRoIHead',
         bbox_roi_extractor=dict(
             type='RotatedSingleRoIExtractor',
-            roi_layer=dict(type='RoIAlignRotated', out_size=7, sample_num=2, clockwise=True),
+            roi_layer=dict(
+                type='RoIAlignRotated',
+                out_size=7,
+                sample_num=2,
+                clockwise=True),
             out_channels=256,
             featmap_strides=[4, 8, 16, 32]),
         bbox_head=dict(
@@ -64,7 +68,8 @@ model = dict(
                 target_means=(.0, .0, .0, .0, .0),
                 target_stds=(0.1, 0.1, 0.2, 0.2, 0.1)),
             reg_class_agnostic=True,
-            loss_cls=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
+            loss_cls=dict(
+                type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
             loss_bbox=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0))),
     train_cfg=dict(
         rpn=dict(
@@ -155,25 +160,6 @@ data = dict(
 optimizer = dict(
     _delete_=True,
     type='AdamW',
-    lr=1e-4,
+    lr=0.0001, #/8*gpu_number,
     betas=(0.9, 0.999),
-    weight_decay=0.05,
-    paramwise_cfg=dict(
-        norm_decay_mult=0.0,
-        bias_decay_mult=0.0,
-        bypass_duplicate=True,
-        custom_keys={
-            'backbone': dict(lr_mult=0.0),
-            'attn.spatial_gating_unit.axial_mamba': dict(lr_mult=2.0, decay_mult=0.5),
-            'neck': dict(lr_mult=1.0),
-            'rpn_head': dict(lr_mult=1.0),
-            'roi_head': dict(lr_mult=1.0),
-        }))
-
-runner = dict(type='EpochBasedRunner', max_epochs=2)
-lr_config = dict(
-    policy='step',
-    warmup='linear',
-    warmup_iters=300,
-    warmup_ratio=0.1,
-    step=[1])
+    weight_decay=0.05)
