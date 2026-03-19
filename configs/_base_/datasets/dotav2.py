@@ -1,3 +1,6 @@
+import glob
+import os.path as osp
+
 # dataset settings
 dataset_type = 'DOTADataset'
 data_root = '/home/u2120220582/project/Strip-R-CNN/DOTA_v2/split_ms_dota/'
@@ -50,12 +53,16 @@ data = dict(
     val=dict(
         type=dataset_type,
         classes=classes,
-        ann_file=data_root + 'val/annfiles/',
-        img_prefix=data_root + 'val/images/',
+        ann_file=(data_root + 'val/annfiles/'
+                  if len(glob.glob(osp.join(data_root, 'val/annfiles/*.txt'))) > 0
+                  else data_root + 'trainval/annfiles/'),
+        img_prefix=(data_root + 'val/images/'
+                    if len(glob.glob(osp.join(data_root, 'val/annfiles/*.txt'))) > 0
+                    else data_root + 'trainval/images/'),
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
         classes=classes,
-        ann_file=data_root + 'val/annfiles/',
-        img_prefix=data_root + 'val/images/',
+        ann_file=data_root + 'test/images/',
+        img_prefix=data_root + 'test/images/',
         pipeline=test_pipeline))
