@@ -39,8 +39,7 @@ def evaluate_dota_coco_ap(dataset,
     return {
         'AP50': ap_results[0.50],
         'AP75': ap_results[0.75],
-        'AP': sum(ap_results.values()) / len(ap_results),
-        'mAP': ap_results[0.50]
+        'AP': sum(ap_results.values()) / len(ap_results)
     }
 
 

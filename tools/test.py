@@ -262,13 +262,17 @@ def main():
             eval_kwargs.update(dict(metric=args.eval, **kwargs))
             metric = dataset.evaluate(outputs, **eval_kwargs)
             if args.eval_dota_coco_ap:
-                metric.update(
-                    evaluate_dota_coco_ap(
-                        dataset,
-                        outputs,
-                        scale_ranges=eval_kwargs.get('scale_ranges'),
-                        logger=eval_kwargs.get('logger'),
-                        nproc=eval_kwargs.get('nproc', 4)))
+                dota_coco_metric = evaluate_dota_coco_ap(
+                    dataset,
+                    outputs,
+                    scale_ranges=eval_kwargs.get('scale_ranges'),
+                    logger=eval_kwargs.get('logger'),
+                    nproc=eval_kwargs.get('nproc', 4))
+                for k, v in dota_coco_metric.items():
+                    if k in metric:
+                        metric[f'dota_coco_{k}'] = v
+                    else:
+                        metric[k] = v
             print(metric)
             metric_dict = dict(config=args.config, metric=metric)
             if args.work_dir is not None and rank == 0:
