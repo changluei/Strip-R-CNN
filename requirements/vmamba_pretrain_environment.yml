@@ -69,7 +69,6 @@ dependencies:
       - rich==14.0.0
       - scipy==1.15.3
       - seaborn==0.13.2
-      - selective-scan==0.0.2
       - shapely==2.1.1
       - six==1.17.0
       - submitit==1.5.3

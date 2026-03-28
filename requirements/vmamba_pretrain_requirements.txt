@@ -4,6 +4,8 @@
 # Notes:
 # - This file is for the pretraining environment, not the legacy Strip-R-CNN
 #   finetuning environment in this repo.
+# - It is intentionally trimmed for the current StripNet ImageNet pretraining
+#   use case. VMamba/Mamba-only packages such as `selective-scan` are omitted.
 # - Install with a Python 3.10 conda env on a CUDA 12.1-compatible server.
 # - `torch`, `torchvision`, and `torchaudio` are pinned to the CU121 wheels.
 # - `opencv-python-headless` is kept and `opencv-python` is intentionally
@@ -76,7 +78,6 @@ regex==2024.11.6
 rich==14.0.0
 scipy==1.15.3
 seaborn==0.13.2
-selective-scan==0.0.2
 shapely==2.1.1
 six==1.17.0
 submitit==1.5.3
