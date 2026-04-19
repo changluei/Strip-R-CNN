@@ -2,6 +2,7 @@ _base_ = ['./rotated_retinanet_obb_r50_fpn_1x_dota_le90.py']
 
 model = dict(
     backbone=dict(
+        _delete_=True,
         type='StripNet',
         embed_dims=[32, 64, 160, 256],
         k1s=[1, 1, 1, 1],
