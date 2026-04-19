@@ -12,7 +12,7 @@ STRIP_PREFIXES = ('module.', 'model.')
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Convert a timm StripNet training checkpoint to an MMRotate-compatible backbone checkpoint.')
+        description='Convert a timm StripNet-family training checkpoint to an MMRotate-compatible backbone checkpoint.')
     parser.add_argument('src', help='Path to the timm training checkpoint.')
     parser.add_argument('dst', help='Path to save the converted checkpoint.')
     parser.add_argument(
